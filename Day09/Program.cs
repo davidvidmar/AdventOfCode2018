@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
+using System.Timers;
 
 namespace Day09
 {
@@ -8,7 +10,7 @@ namespace Day09
     {
         static void Main(string[] args)
         {
-            Console.WriteLine("Advent of Code 2018 - Day 8\n");
+            Console.WriteLine("Advent of Code 2018 - Day 9\n");
 
             // part 1
 
@@ -27,58 +29,61 @@ namespace Day09
             foreach (var example in examples)
             {
                 var (playersExample, lastMarbleExample, highScoreExample) = ParseInput(example);
-                var scoreExample = Play(playersExample, lastMarbleExample);
+                var scoreExample = Play(playersExample, lastMarbleExample, playersExample < 10);
 
-                Console.Write($"Players: {playersExample,3} | Last Marble: {lastMarbleExample,7} | Score: {highScoreExample,8}");
-                Console.WriteLine($" | Calculated Score: {scoreExample,8} | Correct: {highScoreExample == scoreExample}");
+                Console.Write($"Players: {playersExample,3} | Last Marble: {lastMarbleExample,7} | Score: {highScoreExample, 7}");
+                Console.WriteLine($" | Calculated Score: {scoreExample,12} | Correct: {highScoreExample == scoreExample}");
             }
 
             var input = "468 players; last marble is worth 71843 points";
             var (players, lastMarble, highScore) = ParseInput(input);
 
-            Console.Write($"\nPlayers: {players,3} | Last Marble: {lastMarble,7} | Score: {highScore,8}");
+            Console.Write($"\nPlayers: {players,3} | Last Marble: {lastMarble,7} | Score: {highScore,7}");
+
+            var stopwatch = new Stopwatch();
+            stopwatch.Start();
             var score = Play(players, lastMarble);
-            Console.WriteLine($" | Calculated Score: {score,8} | Correct: {highScore == score}");
+            stopwatch.Stop();
+            Console.WriteLine($" | Calculated Score: {score,12} | Elapsed: {stopwatch.ElapsedMilliseconds} ms.");            
 
             // part 2
-            
+
             Console.WriteLine("\nPart 2\n");
 
             input = "468 players; last marble is worth 7184300 points";
             (players, lastMarble, highScore) = ParseInput(input);
 
-            Console.Write($"Players: {players,3} | Last Marble: {lastMarble,7} | Score: {highScore,8}");
+            Console.Write($"Players: {players,3} | Last Marble: {lastMarble,7} | Score: {highScore,7}");
+            
+            stopwatch.Start();
             score = Play(players, lastMarble);
-            Console.WriteLine($" | Calculated Score: {score,8} | Correct: {highScore == score}");
+            stopwatch.Stop();
+            Console.WriteLine($" | Calculated Score: {score,12} | Elapsed: {stopwatch.ElapsedMilliseconds} ms.");            
         }
 
-        private static long Play(int players, int lastMarble)
+        private static long Play(int players, int lastMarble, bool print = false)
         {
-            long currentMarble = 1;
-            var currentIndex = 1;
             var currentPlayer = 0;
-            var nextMarble = 2;
-            var turn = 2;
+            var nextMarble = 0;
+            
             var score = new long[players];
-            var list = new List<long>(lastMarble) { 0, 1 };
+            var list = new LinkedList<long>();
 
-            //PrintList(turn, currentPlayer, currentMarble, list);
+            var currentNode = list.AddFirst(nextMarble++);
+            currentNode = list.AddAfter(currentNode, nextMarble++);
+
             currentPlayer++;
-            turn++;
+
+            if (print) PrintList(currentPlayer, currentNode.Value, list);
 
             while (nextMarble <= lastMarble)
             {
-                //var i = list.IndexOf(currentMarble);                
-
                 if (nextMarble % 23 != 0)
                 {
-                    // between places 1 and 2 to the right
-                    currentIndex = currentIndex + 2;
-                    if (currentIndex > list.Count) currentIndex = currentIndex - list.Count;
-
-                    // add and it becomes current marble
-                    list.Insert(currentIndex, nextMarble);
-                    currentMarble = nextMarble;
+                    // move right or wrap around
+                    currentNode = currentNode.Next ?? list.First;                    
+                    // add new
+                    currentNode = list.AddAfter(currentNode, nextMarble);                    
                 }
                 else
                 {
@@ -86,47 +91,44 @@ namespace Day09
                     score[currentPlayer] += nextMarble;
 
                     // marble seven places to the left
-                    int indexSevenLeft = currentIndex - 7;
-                    if (indexSevenLeft < 0) indexSevenLeft += list.Count;
-                    
-                    // remove and keep seven places to the left                    
-                    score[currentPlayer] += list[indexSevenLeft];
-                    list.RemoveAt(indexSevenLeft);
+                    for (int i = 0; i < 7; i++)
+                        currentNode = currentNode.Previous ?? list.Last;
 
-                    currentMarble = list[indexSevenLeft];
-                    currentIndex = indexSevenLeft;
+                    // add to score remove and keep seven places to the left                    
+                    score[currentPlayer] += currentNode.Value;
+                    var next = currentNode.Next ?? list.First;
+                    list.Remove(currentNode);
+                    currentNode = next;                    
                 }
 
-                //PrintList(turn, currentPlayer, currentMarble, list);
+                if (print) PrintList(currentPlayer, currentNode.Value, list);
 
-                turn++;                
                 nextMarble++;
-
                 currentPlayer++;
                 if (currentPlayer >= players) currentPlayer = currentPlayer - players;
-
-                if (nextMarble % 100000 == 0) Console.WriteLine(nextMarble);
             }
+
+            if (print) Console.WriteLine("");
 
             var highScore = score.Max();
             //return (score.IndexOf(highScore), high/Score);
             return highScore;
         }
 
-        private static void PrintList(int turn, int currentPlayer, long currentMarble, List<long> list)
+        private static void PrintList(int currentPlayer, long currentMarble, LinkedList<long> list)
         {
             //Console.Write($"{turn, 2} [{currentPlayer + 1}] ");
             Console.Write($"[{currentPlayer + 1}]");
 
             var lastCurrent = false;
-            if (list.Count < 30) 
-                for (int i = 0; i < list.Count; i++)
-                {
-                    if (list[i] == currentMarble)
+            if (list.Count < 30)
+                foreach (var item in list)
+                {                
+                    if (item == currentMarble)
                     {
                         Console.ForegroundColor = ConsoleColor.Yellow;
-                        if (list[i] < 10) Console.Write(" ");                        
-                        Console.Write($"({list[i]})");
+                        if (item < 10) Console.Write(" ");
+                        Console.Write($"({item})");
                         Console.ResetColor();
                         lastCurrent = true;
                     }
@@ -134,9 +136,10 @@ namespace Day09
                     {
                         if (!lastCurrent) Console.Write(" ");
                         lastCurrent = false;
-                        Console.Write($"{list[i],2}");
-                    }                    
+                        Console.Write($"{item,2}");
+                    }
                 }
+
             Console.WriteLine();
         }
 
@@ -151,7 +154,7 @@ namespace Day09
                 s = "0";
             var score = s;
             return (int.Parse(player), int.Parse(points), int.Parse(score));
-            
         }
     }
+
 }
