@@ -94,25 +94,25 @@ namespace Day11
         private static int SumXxX(int[,] grid, int x, int y, int sumSize)
         {
             var sum = 0;
-            //Parallel.For<int>(0, sumSize,
-            //    () => 0,
-            //    (i, loop, subtotal) =>
-            //    {
-            //        for (int j = 0; j < sumSize; j++)
-            //        {                        
-            //            subtotal += grid[x + j, y + i];
-            //        }                        
-            //        return subtotal;
-            //    },
-            //    (st) => Interlocked.Add(ref sum, st)
-            //);
-            for (int i = 0; i < sumSize; i++)
-            {                
-                for (int j = 0; j < sumSize; j++)
+            Parallel.For(0, sumSize,
+                () => 0,
+                (i, loop, subtotal) =>
                 {
-                    sum += grid[x + j, y + i];
-                }
-            }
+                    for (int j = 0; j < sumSize; j++)
+                    {
+                        subtotal += grid[x + j, y + i];
+                    }
+                    return subtotal;
+                },
+                (subtotal) => Interlocked.Add(ref sum, subtotal)
+            );
+            //for (int i = 0; i < sumSize; i++)
+            //{                
+            //    for (int j = 0; j < sumSize; j++)
+            //    {
+            //        sum += grid[x + j, y + i];
+            //    }
+            //}
             return sum;
         }
 
@@ -138,4 +138,3 @@ namespace Day11
         }
     }
 }
-
