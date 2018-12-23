@@ -117,6 +117,9 @@ namespace Day13
                     crash = true;
                     if (getLast)
                     {
+                        carts.RemoveAll(c => c.Row == move.OldRow && c.Col == move.OldCol); // part 2 bug!
+                        carts.RemoveAll(c => c.Row == move.NewRow && c.Col == move.NewCol); // part 2 bug!
+
                         newChar = origField[move.NewRow][move.NewCol];
                         //Debug.WriteLine($"Tick: {tick} - crash @ {move.NewRow},{move.NewCol} left: {NumberOfCarts(field)}");
                         //Print(field, carts, tick, move.NewRow);
