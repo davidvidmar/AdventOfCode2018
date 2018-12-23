@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -8,39 +9,33 @@ namespace Day13
 {
     class Program
     {
-        static readonly bool _print = true;
-        static readonly bool _auto = true;
+        static bool _print = false;
+        static readonly bool _auto = false;
 
         static void Main(string[] args)
         {
             Console.WriteLine("Advent of Code 2018 - Day 13\n");
 
-            Console.WriteLine("Part 1\n");
-
-            var input = File.ReadAllLines("example4.txt");
-            var result = Play(input);
+            var input = File.ReadAllLines("input.txt");
+            var result = Play(input, true);
 
             Console.WriteLine($"\nResult: {result}");
-
-            //Console.WriteLine("Part 2\n");
-
-            //result = 0;
-
-            //Console.WriteLine($"Result: {result}");
-
+            Console.ReadLine();
         }
 
-        private static (int, int) Play(string[] field)
+        private static (int, int) Play(string[] field, bool getLast = false)
         {
             var tick = 0;
+            
             // store original tracks without carts
-            var origField = (string[])field.Clone();
-            for (int i = 0; i < origField.Length; i++)            
-                origField[i] = origField[i].Replace(">", "-").Replace("<", "-").Replace("v", "|").Replace("^", "|");
+            var trackOnly = (string[])field.Clone();
+            for (int i = 0; i < trackOnly.Length; i++)            
+                trackOnly[i] = trackOnly[i].Replace(">", "-").Replace("<", "-").Replace("v", "|").Replace("^", "|");
 
             var carts = new List<Cart>();
 
-            Print(origField, carts, tick);            
+            Print(trackOnly, carts, tick);
+            Debug.WriteLine($"{tick} - {NumberOfCarts(field)}");
 
             var moves = new List<Move>();
             int? row = null;
@@ -48,25 +43,29 @@ namespace Day13
 
             while (true)
             {
-                Print(field, carts, tick++);
+                tick++;
+
+                Print(field, carts, tick);
+
                 moves.Clear();
-                for (int i = 0; i < field.Length; i++)
+
+                for (int rownNum = 0; rownNum < field.Length; rownNum++)
                 {
-                    string line = field[i];
-                    for (int j = 0; j < line.Length; j++)
+                    string line = field[rownNum];
+                    for (int colNum = 0; colNum < line.Length; colNum++)
                     {
-                        var ch = line[j];
+                        var ch = line[colNum];
                         if (ch == '>')
-                            moves.Add(MoveRight(origField, carts, i, j));
+                            moves.Add(MoveRight(trackOnly, carts, rownNum, colNum));
                         else if (ch == '<')
-                            moves.Add(MoveLeft(origField, carts, i, j));
+                            moves.Add(MoveLeft(trackOnly, carts, rownNum, colNum));
                         else if (ch == '^')
-                            moves.Add(MoveUp(origField, carts, i, j));
+                            moves.Add(MoveUp(trackOnly, carts, rownNum, colNum));
                         else if (ch == 'v')
-                            moves.Add(MoveDown(origField, carts, i, j));                        
+                            moves.Add(MoveDown(trackOnly, carts, rownNum, colNum));                        
                     }
                 }
-                var (r, c) = ProcessMoves(field, carts, moves, origField, tick);                
+                var (r, c) = ProcessMoves(field, carts, moves, trackOnly, tick, getLast);                
                 if (r != null)
                 {
                     row = r;
@@ -78,16 +77,52 @@ namespace Day13
             return (col.Value, row.Value);
         }
 
-        private static (int?, int?) ProcessMoves(string[] field, List<Cart> carts, List<Move> moves, string[] origField, int tick)
+        private static (int?, int?) ProcessMoves(string[] field, List<Cart> carts, List<Move> moves, string[] origField, int tick, bool getLast)
         {
+            //if (_saveMoves)
+            //    File.AppendAllLines("moves.txt", moves.Select(m => m.ToString()));
+
+            //if (tick >= 4640 && tick <= 4650)
+            //{
+            //    Debug.WriteLine($"Tick: {tick} - left: {NumberOfCarts(field)}");
+            //    File.WriteAllLines(tick + ".txt", field);
+            //    File.AppendAllText("moves.txt", $"Tick: {tick}\n\n");
+            //    File.AppendAllLines("moves.txt", moves.Select(m => m.ToString()));
+            //}
+            var crashes = new List<Move>();
+
             foreach (var move in moves)
-            {                
+            {
+                if (crashes.Any(m => move.OldRow == m.NewRow && move.OldCol == m.NewCol))
+                    continue;
+
+                //if (tick > 1000 && move.ToString() == "v @ 81,46")
+                //{
+                //    _print = true;
+                //    Print(field, carts, tick, 46);
+                //}
+
+                Debug.WriteLine(move);
+
                 var newChar = move.NewChar;
                 var newRow = field[move.NewRow].ToCharArray();
-
+                var crash = false;
+                
                 // colission detection
                 if ("<>^v".Contains(newRow[move.NewCol]))
-                    newChar = 'X';
+                {
+                    crashes.Add(move);
+
+                    newChar = 'X'; 
+                    crash = true;
+                    if (getLast)
+                    {
+                        newChar = origField[move.NewRow][move.NewCol];
+                        //Debug.WriteLine($"Tick: {tick} - crash @ {move.NewRow},{move.NewCol} left: {NumberOfCarts(field)}");
+                        //Print(field, carts, tick, move.NewRow);
+                        //File.WriteAllLines(tick + "-1.txt", field);                        
+                    }
+                }
                 
                 newRow[move.NewCol] = newChar;
                 field[move.NewRow] = new string(newRow);
@@ -100,12 +135,45 @@ namespace Day13
                 
                 if (newChar == 'X') return (move.NewRow, move.NewCol);
 
-                var cart = FindCart(carts, move.OldRow, move.OldCol);
-                cart.Row = move.NewRow;
-                cart.Col = move.NewCol;
+                if (crash)
+                {
+                    Debug.WriteLine($"Tick: {tick} - crash @ {move.NewRow},{move.NewCol} left: {NumberOfCarts(field)}\n");
+                    //File.WriteAllLines(tick + "-2.txt", field);
+                    crash = false;
+                }
+                else
+                {
+                    var cart = FindCart(carts, move.OldRow, move.OldCol);
+                    cart.Row = move.NewRow;
+                    cart.Col = move.NewCol;
+                }
+            }
+
+            if (NumberOfCarts(field) == 1)
+            {
+                File.WriteAllLines(tick + "-final.txt", field);
+                var lastCart = FindFirstCart(field);
+                Debug.WriteLine("Last cart: " + lastCart);
+                return lastCart;
             }
 
             return (null, null);
+        }
+
+        private static int NumberOfCarts(string[] field)
+        {
+            return string.Join("", field).Count(c => "<>^v".Contains(c));
+        }
+
+        private static (int, int) FindFirstCart(string[] field)
+        {
+            for (int i = 0; i < field.Length; i++)
+            {
+                string row = field[i];
+                var j = row.IndexOfAny("<>^v".ToCharArray());
+                if (j >= 0) return (i, j);
+            }
+            return (-1, -1);
         }
 
         private static Move MoveDown(string[] origField, List<Cart> carts, int rowNum, int colNum)
@@ -148,29 +216,31 @@ namespace Day13
             return new Move(rowNum, colNum, rowNum, colNum + 1, nextMove);
         }
 
-        private static void Print(string[] field, List<Cart> carts, int? tick)
-        {            
-            Console.SetCursorPosition(0, 2);
+        private static void Print(string[] field, List<Cart> carts, int? tick, int highlightRow = -1)
+        {
+            //if (!_print && highlightRow == -1) return;
+            if (!_print) return;
 
-            Console.WriteLine("Tick: " + tick + "\n");
+            Console.Clear();
+            Console.WriteLine("Tick: " + tick);
 
-            foreach (var cart in carts)
-                Console.WriteLine(cart + "  ");
-
-            Console.WriteLine(new String(' ', Console.WindowWidth));                                
-
-            if (_print)
+            for (int i = 0; i < field.Length; i++)
             {
-                foreach (var line in field)
-                {
-                    Console.WriteLine(line + new string(' ', Console.WindowWidth - line.Length - 1));
-                }
-
-                if (_auto)
-                    Thread.Sleep(10);
-                else
-                    Console.ReadKey();
+                string line = field[i];
+                if (i == highlightRow) Console.ForegroundColor = ConsoleColor.Red;
+                Console.WriteLine($"{i,3}: {line}");
+                Console.ResetColor();
             }
+
+            for (int i = 0; i < carts.Count; i++)
+            {
+                Console.WriteLine($"{i}: {carts[i]}");
+            }
+
+            if (_auto)
+                Thread.Sleep(10);
+            else
+                Console.ReadKey();
         }
        
         private static Cart FindCart(List<Cart> carts, int row, int col)
@@ -192,34 +262,27 @@ namespace Day13
         private static char NextIntersect(char dir, Cart cart)
         {
             cart.Intersect++;
-            if (cart.Intersect == 5) cart.Intersect = 1;
-            if (cart.Intersect == 1) // left
+            if (cart.Intersect == 4) cart.Intersect = 1;
+            if (cart.Intersect == 1) // turn left
             {
                 if (dir == 'L') return 'v';
                 if (dir == 'U') return '<';
                 if (dir == 'R') return '^';
                 if (dir == 'D') return '>';
             }
-            if (cart.Intersect == 2) // straigh
+            if (cart.Intersect == 2) // go straigh
             {
                 if (dir == 'L') return '<';
                 if (dir == 'U') return '^';
                 if (dir == 'R') return '>';
                 if (dir == 'D') return 'v';
             }
-            if (cart.Intersect == 3) // right
+            if (cart.Intersect == 3) // turn right
             {
                 if (dir == 'L') return '^';
                 if (dir == 'U') return '>';
                 if (dir == 'R') return 'v';
                 if (dir == 'D') return '<';
-            }
-            if (cart.Intersect == 4) // straight
-            {
-                if (dir == 'L') return '<';
-                if (dir == 'U') return '^';
-                if (dir == 'R') return '>';
-                if (dir == 'D') return 'v';
             }
             throw new Exception();
         }
@@ -236,25 +299,23 @@ namespace Day13
 
         public override string ToString()
         {
-            return $"@{Col}x{Row}; {Intersect}";
-        }
+            return $"{Col}, {Row} # {Intersect}";
+        }        
     }
 
     class Move
     {        
         public int OldRow { get; set; }
         public int OldCol { get; set; }
-        //public char OldChar { get; set; }
                 
         public int NewRow { get; set;  }
         public int NewCol { get; set; }        
         public char NewChar { get; set; }
 
-        public Move(int oldRow, int oldCol, /*char oldChar, */int newRow, int newCol, char newChar)
+        public Move(int oldRow, int oldCol, int newRow, int newCol, char newChar)
         {
             OldCol = oldCol;
             OldRow = oldRow;
-            //OldChar = oldChar;
             NewCol = newCol;
             NewRow = newRow;            
             NewChar = newChar;
@@ -262,7 +323,7 @@ namespace Day13
 
         public override string ToString()
         {
-            return $"@{OldRow}, {OldCol} | {NewRow}, {NewCol} @ {NewChar}";
+            return $"{NewChar} @ {NewCol},{NewRow}";
         }
 
     }
